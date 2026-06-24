@@ -68,11 +68,13 @@ one document this app uses:
    you want real authentication later, Firebase supports that too, but it's
    more setup than this guide covers.
 
-## 4. Deploy to GitHub Pages
+## 5. Deploy to GitHub Pages
 
 1. Create a new GitHub repo (or use an existing one), e.g. `bella-care`.
-2. Add `index.html` (with your Firebase config filled in) to the root of the
-   repo.
+2. Add `index.html`, `manifest.json`, `sw.js`, and the **`icons/` folder**
+   (with all the `.png` files inside it) to the root of the repo — keep the
+   same folder structure, since `index.html` and `manifest.json` reference
+   `icons/...` as a relative path.
 3. Go to the repo's **Settings → Pages**.
 4. Under **Source**, choose **Deploy from a branch**, pick `main` (or
    `master`) and `/ (root)`, then **Save**.
@@ -80,8 +82,25 @@ one document this app uses:
 
    `https://yourusername.github.io/bella-care/`
 
-6. Share that link with whoever is dog-sitting. Bookmark it on phones for
-   quick access.
+6. Share that link with whoever is dog-sitting. On a phone, opening that
+   link and using "Add to Home Screen" (iOS Safari share menu, or the
+   install prompt on Android Chrome) installs Bella's photo as the app icon.
+
+## Updating Bella's photo / app icon later
+
+The `icons/` folder has everything pre-generated from one source photo:
+
+| File | Used for |
+|---|---|
+| `icon-512.png`, `icon-192.png` | Standard PWA icon (most platforms) |
+| `icon-maskable-512.png`, `icon-maskable-192.png` | Android adaptive icon — has padding built in since Android can crop icons into a circle/squircle |
+| `apple-touch-icon.png` | iOS home screen icon |
+| `favicon-32.png`, `favicon-16.png` | Browser tab icon |
+
+To swap in a new photo, crop it to a square focused on Bella's face first
+(square crop, face filling most of the frame), then regenerate each size
+from that square — or just send Claude the new photo and ask it to redo the
+icon set.
 
 ## How daily reset works
 
