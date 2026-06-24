@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bella's Care Dashboard</title>
+<meta name="description" content="Daily care dashboard for Bella the dog" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- React -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+
+<!-- Firebase (compat libraries, simplest for a single static file) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root {
+    --cream: #FBF3E7;
+    --cream-deep: #F3E7D4;
+    --ink: #3D2B1F;
+    --ink-soft: #6B5645;
+    --terracotta: #C4622D;
+    --terracotta-deep: #A8501F;
+    --sage: #7A8B5C;
+    --sage-deep: #5F6F45;
+    --gold: #E8B14E;
+    --rust: #A23E2E;
+    --line: #E3D5BE;
+    --white: #FFFDF9;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root { min-height: 100vh; }
+
+  h1, h2, h3, .display {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--terracotta);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  .app-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 16px 64px;
+  }
+
+  /* ---------- HEADER ---------- */
+  .header {
+    padding: 28px 0 18px;
+    text-align: center;
+  }
+  .header-title {
+    font-size: 30px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .header-title .accent { color: var(--terracotta); }
+  .header-sub {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+    font-weight: 500;
+  }
+  .date-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-top: 10px;
+  }
+
+  /* ---------- PAW PROGRESS TRAIL (signature element) ---------- */
+  .progress-card {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--cream);
+    padding: 10px 0 14px;
+    margin-bottom: 8px;
+  }
+  .progress-card::after {
+    content: '';
+    position: absolute;
+    left: -16px; right: -16px; bottom: 0;
+    height: 16px;
+    background: linear-gradient(to bottom, var(--cream), transparent);
+    pointer-events: none;
+  }
+  .progress-inner {
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    border-radius: 20px;
+    padding: 14px 16px 12px;
+    box-shadow: 0 2px 10px rgba(61,43,31,0.06);
+  }
+  .progress-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .progress-label {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .progress-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--terracotta-deep);
+  }
+  .paw-trail {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    position: relative;
+  }
+  .paw-slot {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+  .paw-slot svg { width: 100%; height: auto; max-width: 22px; transition: transform 0.25s ease; }
+  .paw-slot.done svg { transform: scale(1.08); }
+  .paw-track-line {
+    position: absolute;
+    top: 50%;
+    left: 0; right: 0;
+    height: 3px;
+    background: var(--cream-deep);
+    border-radius: 3px;
+    z-index: 0;
+  }
+  .paw-track-fill {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--terracotta), var(--gold));
+    border-radius: 3px;
+    z-index: 0;
+    transition: width 0.4s ease;
+  }
+  .paw-walker {
+    position: absolute;
+    top: -22px;
+    transition: left 0.4s ease;
+    font-size: 18px;
+    z-index: 2;
+    filter: drop-shadow(0 2px 2px rgba(61,43,31,0.2));
+  }
+  .progress-quip {
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    font-weight: 500;
+  }
+
+  /* ---------- NAV TABS (time of day quick jump) ---------- */
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 0 16px;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab {
+    flex-shrink: 0;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-tab .nav-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--line);
+  }
+  .nav-tab.complete .nav-dot { background: var(--sage); }
+
+  /* ---------- SECTION CARDS ---------- */
+  .section {
+    margin-bottom: 22px;
+    scroll-margin-top: 130px;
+  }
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 0 4px;
+  }
+  .section-icon {
+    width: 34px; height: 34px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .section-title-block { flex: 1; }
+  .section-title {
+    font-size: 18px;
+    color: var(--ink);
+  }
+  .section-time {
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .section-badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--cream-deep);
+    color: var(--ink-soft);
+  }
+  .section-badge.done { background: var(--sage); color: var(--white); }
+
+  .section[data-period="morning"] .section-icon { background: #FFE7C2; }
+  .section[data-period="noon"] .section-icon { background: #FFD9C2; }
+  .section[data-period="afternoon"] .section-icon { background: #E3D9F5; }
+  .section[data-period="evening"] .section-icon { background: #D4DCEE; }
+
+  .task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ---------- TASK CARD ---------- */
+  .task {
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 14px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .task.done {
+    background: #F4F7EF;
+    border-color: #C9D6B5;
+  }
+  .task-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .check-btn {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--white);
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .check-btn:active { transform: scale(0.92); }
+  .check-btn.checked {
+    background: var(--sage);
+    border-color: var(--sage-deep);
+  }
+  .check-btn svg { width: 14px; height: 14px; opacity: 0; transition: opacity 0.15s; }
+  .check-btn.checked svg { opacity: 1; }
+
+  .task-main { flex: 1; min-width: 0; }
+  .task-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .task.done .task-name {
+    color: var(--sage-deep);
+    text-decoration: line-through;
+    text-decoration-color: #A9BB91;
+  }
+  .task-meta {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+    font-weight: 500;
+  }
+  .task-delete {
+    color: var(--ink-soft);
+    opacity: 0.5;
+    padding: 4px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .task-delete:hover { opacity: 1; color: var(--rust); }
+
+  /* let-out pee/poop pills */
+  .letout-pills {
+    display: flex;
+    gap: 6px;
+    margin-top: 9px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: var(--cream);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  .pill.active.pee { background: #FFF0CC; border-color: var(--gold); color: #8A6418; }
+  .pill.active.poop { background: #E6DCC8; border-color: #8A6E45; color: #5C4727; }
+
+  /* logged-by + time tag */
+  .log-tag {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  /* ---------- ADD CUSTOM TASK ---------- */
+  .add-task-card {
+    background: var(--white);
+    border: 1.5px dashed var(--line);
+    border-radius: 16px;
+    padding: 12px 14px;
+  }
+  .add-task-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--terracotta-deep);
+    font-weight: 700;
+    font-size: 14px;
+    width: 100%;
+  }
+  .add-task-toggle .plus-circle {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--terracotta);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .add-task-form {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .add-task-form input, .add-task-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: var(--cream);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+  }
+  .add-task-form-row { display: flex; gap: 8px; }
+  .add-task-form-row > * { flex: 1; }
+  .btn-primary {
+    background: var(--terracotta);
+    color: var(--white);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    text-align: center;
+  }
+  .btn-primary:hover { background: var(--terracotta-deep); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 10px;
+  }
+  .form-btn-row { display: flex; gap: 8px; margin-top: 2px; }
+  .form-btn-row > * { flex: 1; }
+
+  /* ---------- CARE CARD ---------- */
+  .care-card-section { margin-top: 30px; margin-bottom: 22px; }
+  .care-card {
+    background: linear-gradient(155deg, #FFFDF9 0%, #FFF6E9 100%);
+    border: 1.5px solid var(--line);
+    border-radius: 20px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .care-card::before {
+    content: '🐾';
+    position: absolute;
+    right: -10px; top: -14px;
+    font-size: 90px;
+    opacity: 0.06;
+    transform: rotate(15deg);
+  }
+  .care-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .care-card-title {
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .edit-btn {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--terracotta-deep);
+    background: var(--cream);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+  }
+  .care-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) {
+    .care-grid { grid-template-columns: 1fr; }
+  }
+  .care-field {
+    background: rgba(255,255,255,0.65);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .care-field-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--terracotta-deep);
+    font-weight: 800;
+    margin-bottom: 3px;
+  }
+  .care-field-value {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .care-field.emergency .care-field-label { color: var(--rust); }
+  .care-field.emergency {
+    background: #FBE9E5;
+    grid-column: 1 / -1;
+  }
+  .care-field.emergency .care-field-value { color: var(--rust); font-weight: 700; }
+
+  .care-edit-form { display: flex; flex-direction: column; gap: 10px; }
+  .care-edit-form label {
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .care-edit-form textarea, .care-edit-form input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: var(--white);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    resize: vertical;
+  }
+
+  /* ---------- DAY RESET FOOTER ---------- */
+  .footer-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1.5px solid var(--line);
+  }
+  .reset-btn {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1.5px solid var(--line);
+    background: var(--white);
+  }
+  .reset-btn:hover { color: var(--rust); border-color: var(--rust); }
+  .footer-note {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    opacity: 0.7;
+    text-align: center;
+  }
+
+  /* connection status */
+  .conn-status {
+    position: fixed;
+    bottom: 14px;
+    right: 14px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 30;
+    box-shadow: 0 2px 8px rgba(61,43,31,0.1);
+  }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .conn-dot.ok { background: var(--sage); }
+  .conn-dot.bad { background: var(--rust); }
+  .conn-dot.loading { background: var(--gold); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .setup-banner {
+    background: #FBE9E5;
+    border: 1.5px solid var(--rust);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .setup-banner code {
+    background: rgba(61,43,31,0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(61,43,31,0.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 50;
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @media (min-width: 600px) {
+    .modal-overlay { align-items: center; }
+  }
+  .modal-sheet {
+    background: var(--cream);
+    border-radius: 22px 22px 0 0;
+    width: 100%;
+    max-width: 480px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 20px 18px 28px;
+  }
+  @media (min-width: 600px) {
+    .modal-sheet { border-radius: 20px; }
+  }
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .modal-title { font-size: 18px; }
+  .modal-close {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ===================== FIREBASE CONFIG =====================
+   Replace the values below with your own Firebase project config.
+   See the setup guide for exact steps to get these values.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const FIREBASE_NOT_CONFIGURED = firebaseConfig.apiKey === "YOUR_API_KEY";
+
+let db = null;
+if (!FIREBASE_NOT_CONFIGURED) {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}
+
+const DOC_PATH = { collection: "bellaCare", doc: "state" };
+
+/* ===================== DEFAULT DATA ===================== */
+
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function makeDefaultSchedule() {
+  return [
+    {
+      id: "morning",
+      label: "Morning",
+      time: "6:00 – 9:00 AM",
+      icon: "🌅",
+      tasks: [
+        { id: "m-meal", type: "meal", name: "Breakfast", done: false, loggedBy: null, loggedAt: null },
+        { id: "m-letout", type: "letout", name: "Morning let-out", done: false, pee: false, poop: false, loggedBy: null, loggedAt: null }
+      ]
+    },
+    {
+      id: "noon",
+      label: "Noon",
+      time: "11:30 AM – 1:00 PM",
+      icon: "☀️",
+      tasks: [
+        { id: "n-meal", type: "meal", name: "Midday meal", done: false, loggedBy: null, loggedAt: null },
+        { id: "n-letout", type: "letout", name: "Noon let-out", done: false, pee: false, poop: false, loggedBy: null, loggedAt: null }
+      ]
+    },
+    {
+      id: "afternoon",
+      label: "Afternoon",
+      time: "3:00 – 5:00 PM",
+      icon: "🌤️",
+      tasks: [
+        { id: "a-letout", type: "letout", name: "Afternoon let-out", done: false, pee: false, poop: false, loggedBy: null, loggedAt: null }
+      ]
+    },
+    {
+      id: "evening",
+      label: "Evening",
+      time: "6:30 – 9:00 PM",
+      icon: "🌙",
+      tasks: [
+        { id: "e-meal", type: "meal", name: "Dinner", done: false, loggedBy: null, loggedAt: null },
+        { id: "e-letout", type: "letout", name: "Evening let-out", done: false, pee: false, poop: false, loggedBy: null, loggedAt: null }
+      ]
+    }
+  ];
+}
+
+function makeDefaultCareCard() {
+  return {
+    feeding: "1 cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
+    treats: "Freeze-dried liver bites (the good ones, top shelf).\nNo rawhide \u2014 upsets her stomach.",
+    temperament: "Friendly with people, a little shy with new dogs at first.\nLoves belly rubs. Startles at vacuum cleaners.",
+    emergency: "Vet: Maple Ridge Animal Hospital \u2014 (555) 014-2290\nAfter-hours emergency: (555) 014-9911\nOwner cell: (555) 014-6743"
+  };
+}
+
+function makeDefaultState() {
+  return {
+    dateKey: todayStr(),
+    schedule: makeDefaultSchedule(),
+    customTasks: [],
+    careCard: makeDefaultCareCard()
+  };
+}
+
+/* ===================== ICONS ===================== */
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M5 13l4 4L19 7" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function PawIcon({ filled }) {
+  const color = filled ? "url(#pawGrad)" : "#E3D5BE";
+  return (
+    <svg viewBox="0 0 32 32" fill="none">
+      <defs>
+        <linearGradient id="pawGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#C4622D" />
+          <stop offset="100%" stopColor="#E8B14E" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="16" cy="21" rx="8" ry="7" fill={color} />
+      <ellipse cx="6" cy="13" rx="4" ry="5" fill={color} />
+      <ellipse cx="14" cy="7" rx="4" ry="5.2" fill={color} />
+      <ellipse cx="22.5" cy="8" rx="4" ry="5.2" fill={color} />
+      <ellipse cx="28.5" cy="14.5" rx="3.6" ry="4.6" fill={color} />
+    </svg>
+  );
+}
+
+/* ===================== HELPER: flatten / progress ===================== */
+
+function getAllTasks(state) {
+  const fromSchedule = state.schedule.flatMap(period => period.tasks.map(t => ({ ...t, periodId: period.id })));
+  const fromCustom = state.customTasks.map(t => ({ ...t, periodId: "custom" }));
+  return [...fromSchedule, ...fromCustom];
+}
+
+function isTaskDone(task) {
+  if (task.type === "letout") return task.pee || task.poop;
+  return !!task.done;
+}
+
+/* ===================== MAIN APP ===================== */
+
+function App() {
+  const [state, setState] = useState(null);
+  const [connStatus, setConnStatus] = useState(FIREBASE_NOT_CONFIGURED ? "unconfigured" : "loading");
+  const [careEditOpen, setCareEditOpen] = useState(false);
+  const [whoModalOpen, setWhoModalOpen] = useState(null); // { periodId, taskId } pending name prompt
+  const [currentUser, setCurrentUser] = useState(() => localStorage.getItem("bella_user_name") || "");
+  const [nameModalOpen, setNameModalOpen] = useState(!localStorage.getItem("bella_user_name"));
+  const isFirstLoad = useRef(true);
+  const skipNextWrite = useRef(false);
+
+  /* ---- Firestore subscription ---- */
+  useEffect(() => {
+    if (FIREBASE_NOT_CONFIGURED) {
+      setState(makeDefaultState());
+      return;
+    }
+    const ref = db.collection(DOC_PATH.collection).doc(DOC_PATH.doc);
+
+    const unsub = ref.onSnapshot(
+      (snap) => {
+        setConnStatus("ok");
+        if (!snap.exists) {
+          const fresh = makeDefaultState();
+          skipNextWrite.current = true;
+          ref.set(fresh).catch(() => {});
+          setState(fresh);
+          return;
+        }
+        const data = snap.data();
+        if (data.dateKey !== todayStr()) {
+          const resetState = {
+            ...data,
+            dateKey: todayStr(),
+            schedule: makeDefaultSchedule(),
+            customTasks: []
+          };
+          skipNextWrite.current = true;
+          ref.set(resetState).catch(() => {});
+          setState(resetState);
+        } else {
+          skipNextWrite.current = true;
+          setState(data);
+        }
+        isFirstLoad.current = false;
+      },
+      (err) => {
+        console.error(err);
+        setConnStatus("bad");
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  /* ---- write-through on state change ---- */
+  useEffect(() => {
+    if (!state || FIREBASE_NOT_CONFIGURED) return;
+    if (skipNextWrite.current) { skipNextWrite.current = false; return; }
+    const ref = db.collection(DOC_PATH.collection).doc(DOC_PATH.doc);
+    ref.set(state).catch((err) => { console.error(err); setConnStatus("bad"); });
+  }, [state]);
+
+  /* ---- midnight auto-reset watcher ---- */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!state) return;
+      if (state.dateKey !== todayStr()) {
+        handleResetDay();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [state]);
+
+  function updateState(updater) {
+    setState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return next;
+    });
+  }
+
+  function handleResetDay() {
+    if (!window.confirm("Start a new day? This clears today's checkmarks and custom tasks for everyone.")) return;
+    updateState(prev => ({
+      ...prev,
+      dateKey: todayStr(),
+      schedule: makeDefaultSchedule(),
+      customTasks: []
+    }));
+  }
+
+  function saveName(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    localStorage.setItem("bella_user_name", trimmed);
+    setCurrentUser(trimmed);
+    setNameModalOpen(false);
+  }
+
+  function toggleMeal(periodId, taskId) {
+    updateState(prev => ({
+      ...prev,
+      schedule: prev.schedule.map(period => {
+        if (period.id !== periodId) return period;
+        return {
+          ...period,
+          tasks: period.tasks.map(t => {
+            if (t.id !== taskId) return t;
+            const newDone = !t.done;
+            return {
+              ...t,
+              done: newDone,
+              loggedBy: newDone ? (currentUser || "Someone") : null,
+              loggedAt: newDone ? new Date().toISOString() : null
+            };
+          })
+        };
+      })
+    }));
+  }
+
+  function toggleLetout(periodId, taskId, field) {
+    updateState(prev => ({
+      ...prev,
+      schedule: prev.schedule.map(period => {
+        if (period.id !== periodId) return period;
+        return {
+          ...period,
+          tasks: period.tasks.map(t => {
+            if (t.id !== taskId) return t;
+            const updated = { ...t, [field]: !t[field] };
+            const anyTrue = updated.pee || updated.poop;
+            return {
+              ...updated,
+              loggedBy: anyTrue ? (currentUser || "Someone") : null,
+              loggedAt: anyTrue ? new Date().toISOString() : null
+            };
+          })
+        };
+      })
+    }));
+  }
+
+  function toggleCustomTask(taskId) {
+    updateState(prev => ({
+      ...prev,
+      customTasks: prev.customTasks.map(t => {
+        if (t.id !== taskId) return t;
+        const newDone = !t.done;
+        return {
+          ...t,
+          done: newDone,
+          loggedBy: newDone ? (currentUser || "Someone") : null,
+          loggedAt: newDone ? new Date().toISOString() : null
+        };
+      })
+    }));
+  }
+
+  function addCustomTask(name, notes) {
+    if (!name.trim()) return;
+    const newTask = {
+      id: "custom-" + Date.now(),
+      type: "custom",
+      name: name.trim(),
+      notes: notes.trim(),
+      done: false,
+      loggedBy: null,
+      loggedAt: null
+    };
+    updateState(prev => ({ ...prev, customTasks: [...prev.customTasks, newTask] }));
+  }
+
+  function deleteCustomTask(taskId) {
+    updateState(prev => ({ ...prev, customTasks: prev.customTasks.filter(t => t.id !== taskId) }));
+  }
+
+  function saveCareCard(newCard) {
+    updateState(prev => ({ ...prev, careCard: newCard }));
+    setCareEditOpen(false);
+  }
+
+  if (!state) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--ink-soft)", fontFamily: "Inter, sans-serif" }}>
+        Loading Bella's dashboard…
+      </div>
+    );
+  }
+
+  const allTasks = getAllTasks(state);
+  const totalCount = allTasks.length;
+  const doneCount = allTasks.filter(isTaskDone).length;
+  const pct = totalCount > 0 ? doneCount / totalCount : 0;
+
+  return (
+    <div className="app-shell">
+      <Header />
+
+      {FIREBASE_NOT_CONFIGURED && (
+        <div className="setup-banner">
+          <strong>Heads up:</strong> Firebase isn't connected yet, so changes won't sync between family members
+          (they'll only be saved on this device). Add your Firebase config in <code>index.html</code> — see the
+          setup guide for exact steps.
+        </div>
+      )}
+
+      <ProgressTrail done={doneCount} total={totalCount} pct={pct} />
+
+      <NavTabs schedule={state.schedule} />
+
+      {state.schedule.map(period => (
+        <ScheduleSection
+          key={period.id}
+          period={period}
+          onToggleMeal={toggleMeal}
+          onToggleLetout={toggleLetout}
+        />
+      ))}
+
+      <CustomTaskSection
+        customTasks={state.customTasks}
+        onToggle={toggleCustomTask}
+        onAdd={addCustomTask}
+        onDelete={deleteCustomTask}
+      />
+
+      <CareCardSection
+        careCard={state.careCard}
+        editing={careEditOpen}
+        onEditOpen={() => setCareEditOpen(true)}
+        onEditClose={() => setCareEditOpen(false)}
+        onSave={saveCareCard}
+      />
+
+      <div className="footer-actions">
+        <button className="reset-btn" onClick={handleResetDay}>🔄 Start new day now</button>
+        <div className="footer-note">
+          Resets automatically at midnight · Signed in as {currentUser || "Guest"}{" "}
+          <button
+            onClick={() => setNameModalOpen(true)}
+            style={{ textDecoration: "underline", color: "var(--ink-soft)", fontWeight: 700 }}
+          >
+            change
+          </button>
+        </div>
+      </div>
+
+      {nameModalOpen && <NameModal initial={currentUser} onSave={saveName} onClose={() => currentUser && setNameModalOpen(false)} canClose={!!currentUser} />}
+
+      <ConnStatus status={connStatus} />
+    </div>
+  );
+}
+
+/* ===================== HEADER ===================== */
+
+function Header() {
+  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return (
+    <div className="header">
+      <h1 className="header-title">🐾 Bella's <span className="accent">Care</span> Dashboard</h1>
+      <div className="header-sub">Everything today's sitter needs to know</div>
+      <div className="date-pill">📅 {dateLabel}</div>
+    </div>
+  );
+}
+
+/* ===================== PROGRESS TRAIL ===================== */
+
+function ProgressTrail({ done, total, pct }) {
+  const slots = Math.max(total, 1);
+  const quip = useMemo(() => {
+    if (total === 0) return "No tasks yet today.";
+    if (pct === 0) return "Bella's waiting on her first check-in!";
+    if (pct < 0.34) return "Off to a good start.";
+    if (pct < 0.67) return "Halfway through Bella's day.";
+    if (pct < 1) return "Almost there — a few paws left!";
+    return "All done! Bella had a great day. 🎉";
+  }, [pct, total]);
+
+  const walkerLeftPct = total === 0 ? 0 : (done / slots) * 100;
+
+  return (
+    <div className="progress-card">
+      <div className="progress-inner">
+        <div className="progress-top-row">
+          <span className="progress-label">Today's progress</span>
+          <span className="progress-count">{done} / {total} done</span>
+        </div>
+        <div className="paw-trail">
+          <div className="paw-track-line"></div>
+          <div className="paw-track-fill" style={{ width: `${pct * 100}%` }}></div>
+          {total > 0 && (
+            <div className="paw-walker" style={{ left: `calc(${walkerLeftPct}% - ${walkerLeftPct > 0 ? 10 : 0}px)` }}>
+              {pct >= 1 ? "🎉" : "🐕"}
+            </div>
+          )}
+          {Array.from({ length: slots }).map((_, i) => (
+            <div key={i} className={`paw-slot ${i < done ? "done" : ""}`}>
+              <PawIcon filled={i < done} />
+            </div>
+          ))}
+        </div>
+        <div className="progress-quip">{quip}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== NAV TABS ===================== */
+
+function NavTabs({ schedule }) {
+  function scrollTo(id) {
+    const el = document.getElementById(`section-${id}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  return (
+    <div className="nav-tabs">
+      {schedule.map(period => {
+        const allDone = period.tasks.every(isTaskDone);
+        return (
+          <button key={period.id} className={`nav-tab ${allDone ? "complete" : ""}`} onClick={() => scrollTo(period.id)}>
+            <span className="nav-dot"></span>
+            {period.icon} {period.label}
+          </button>
+        );
+      })}
+      <button className="nav-tab" onClick={() => scrollTo("custom")}>
+        <span className="nav-dot"></span>
+        ✨ Extras
+      </button>
+      <button className="nav-tab" onClick={() => scrollTo("carecard")}>
+        <span className="nav-dot"></span>
+        💛 Care card
+      </button>
+    </div>
+  );
+}
+
+/* ===================== SCHEDULE SECTION ===================== */
+
+function ScheduleSection({ period, onToggleMeal, onToggleLetout }) {
+  const allDone = period.tasks.every(isTaskDone);
+  const doneCount = period.tasks.filter(isTaskDone).length;
+
+  return (
+    <div className="section" id={`section-${period.id}`} data-period={period.id}>
+      <div className="section-head">
+        <div className="section-icon">{period.icon}</div>
+        <div className="section-title-block">
+          <div className="section-title">{period.label}</div>
+          <div className="section-time">{period.time}</div>
+        </div>
+        <div className={`section-badge ${allDone ? "done" : ""}`}>
+          {doneCount}/{period.tasks.length}
+        </div>
+      </div>
+      <div className="task-list">
+        {period.tasks.map(task => (
+          task.type === "meal"
+            ? <MealTask key={task.id} task={task} onToggle={() => onToggleMeal(period.id, task.id)} />
+            : <LetoutTask key={task.id} task={task} onToggleField={(field) => onToggleLetout(period.id, task.id, field)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function MealTask({ task, onToggle }) {
+  return (
+    <div className={`task ${task.done ? "done" : ""}`}>
+      <div className="task-row">
+        <button className={`check-btn ${task.done ? "checked" : ""}`} onClick={onToggle} aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}>
+          <CheckIcon />
+        </button>
+        <div className="task-main">
+          <div className="task-name">🍽️ {task.name}</div>
+          {task.done && task.loggedBy && (
+            <div className="log-tag">Logged by {task.loggedBy} · {formatTime(task.loggedAt)}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LetoutTask({ task, onToggleField }) {
+  const done = task.pee || task.poop;
+  return (
+    <div className={`task ${done ? "done" : ""}`}>
+      <div className="task-row">
+        <button className={`check-btn ${done ? "checked" : ""}`} disabled style={{ cursor: "default", opacity: done ? 1 : 0.4 }} aria-hidden="true">
+          <CheckIcon />
+        </button>
+        <div className="task-main">
+          <div className="task-name">🚪 {task.name}</div>
+          <div className="task-meta">Tap what Bella did</div>
+          <div className="letout-pills">
+            <button className={`pill pee ${task.pee ? "active pee" : ""}`} onClick={() => onToggleField("pee")}>
+              💧 Pee
+            </button>
+            <button className={`pill poop ${task.poop ? "active poop" : ""}`} onClick={() => onToggleField("poop")}>
+              💩 Poop
+            </button>
+          </div>
+          {done && task.loggedBy && (
+            <div className="log-tag">Logged by {task.loggedBy} · {formatTime(task.loggedAt)}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== CUSTOM TASKS ===================== */
+
+function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [notes, setNotes] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onAdd(name, notes);
+    setName("");
+    setNotes("");
+    setFormOpen(false);
+  }
+
+  return (
+    <div className="section" id="section-custom">
+      <div className="section-head">
+        <div className="section-icon" style={{ background: "#F5E3C8" }}>✨</div>
+        <div className="section-title-block">
+          <div className="section-title">Extra tasks</div>
+          <div className="section-time">Grooming, meds, playtime, anything special</div>
+        </div>
+        {customTasks.length > 0 && (
+          <div className={`section-badge ${customTasks.every(t => t.done) ? "done" : ""}`}>
+            {customTasks.filter(t => t.done).length}/{customTasks.length}
+          </div>
+        )}
+      </div>
+      <div className="task-list">
+        {customTasks.map(task => (
+          <div key={task.id} className={`task ${task.done ? "done" : ""}`}>
+            <div className="task-row">
+              <button className={`check-btn ${task.done ? "checked" : ""}`} onClick={() => onToggle(task.id)} aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}>
+                <CheckIcon />
+              </button>
+              <div className="task-main">
+                <div className="task-name">{task.name}</div>
+                {task.notes && <div className="task-meta">{task.notes}</div>}
+                {task.done && task.loggedBy && (
+                  <div className="log-tag">Logged by {task.loggedBy} · {formatTime(task.loggedAt)}</div>
+                )}
+              </div>
+              <button className="task-delete" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.name}`}>✕</button>
+            </div>
+          </div>
+        ))}
+
+        <div className="add-task-card">
+          {!formOpen ? (
+            <button className="add-task-toggle" onClick={() => setFormOpen(true)}>
+              <span className="plus-circle">+</span> Add a custom task
+            </button>
+          ) : (
+            <form className="add-task-form" onSubmit={submit}>
+              <input
+                placeholder="Task name (e.g. Give heartworm pill)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+              <input
+                placeholder="Notes (optional)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <div className="form-btn-row">
+                <button type="button" className="btn-ghost" onClick={() => { setFormOpen(false); setName(""); setNotes(""); }}>Cancel</button>
+                <button type="submit" className="btn-primary">Add task</button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== CARE CARD ===================== */
+
+function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave }) {
+  const [draft, setDraft] = useState(careCard);
+
+  useEffect(() => { if (editing) setDraft(careCard); }, [editing, careCard]);
+
+  return (
+    <div className="care-card-section" id="section-carecard">
+      <div className="care-card">
+        <div className="care-card-head">
+          <div className="care-card-title">💛 Bella's Care Card</div>
+          {!editing && <button className="edit-btn" onClick={onEditOpen}>Edit</button>}
+        </div>
+
+        {!editing ? (
+          <div className="care-grid">
+            <div className="care-field">
+              <div className="care-field-label">Feeding</div>
+              <div className="care-field-value">{careCard.feeding || "—"}</div>
+            </div>
+            <div className="care-field">
+              <div className="care-field-label">Favorite treats</div>
+              <div className="care-field-value">{careCard.treats || "—"}</div>
+            </div>
+            <div className="care-field">
+              <div className="care-field-label">Temperament</div>
+              <div className="care-field-value">{careCard.temperament || "—"}</div>
+            </div>
+            <div className="care-field emergency">
+              <div className="care-field-label">🚨 Emergency contacts</div>
+              <div className="care-field-value">{careCard.emergency || "—"}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="care-edit-form">
+            <div>
+              <label>Feeding details</label>
+              <textarea rows="3" value={draft.feeding} onChange={(e) => setDraft({ ...draft, feeding: e.target.value })} />
+            </div>
+            <div>
+              <label>Favorite treats</label>
+              <textarea rows="2" value={draft.treats} onChange={(e) => setDraft({ ...draft, treats: e.target.value })} />
+            </div>
+            <div>
+              <label>Temperament notes</label>
+              <textarea rows="2" value={draft.temperament} onChange={(e) => setDraft({ ...draft, temperament: e.target.value })} />
+            </div>
+            <div>
+              <label>Emergency contacts</label>
+              <textarea rows="3" value={draft.emergency} onChange={(e) => setDraft({ ...draft, emergency: e.target.value })} />
+            </div>
+            <div className="form-btn-row">
+              <button className="btn-ghost" onClick={onEditClose}>Cancel</button>
+              <button className="btn-primary" onClick={() => onSave(draft)}>Save changes</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== NAME MODAL ===================== */
+
+function NameModal({ initial, onSave, onClose, canClose }) {
+  const [val, setVal] = useState(initial || "");
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && canClose) onClose(); }}>
+      <div className="modal-sheet">
+        <div className="modal-head">
+          <div className="modal-title">👋 Who's checking in?</div>
+          {canClose && <button className="modal-close" onClick={onClose}>✕</button>}
+        </div>
+        <p style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 0, marginBottom: 12 }}>
+          Your name gets attached to tasks you check off, so everyone knows who did what.
+        </p>
+        <form onSubmit={(e) => { e.preventDefault(); onSave(val); }}>
+          <input
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid var(--line)", fontSize: 15, fontFamily: "inherit" }}
+            placeholder="e.g. Mom, Jake, Aunt Carol…"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            autoFocus
+          />
+          <div className="form-btn-row" style={{ marginTop: 12 }}>
+            <button type="submit" className="btn-primary">Save & continue</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== CONNECTION STATUS ===================== */
+
+function ConnStatus({ status }) {
+  const labels = {
+    ok: "Synced",
+    loading: "Connecting…",
+    bad: "Offline",
+    unconfigured: "Local only"
+  };
+  const dotClass = { ok: "ok", loading: "loading", bad: "bad", unconfigured: "bad" }[status];
+  return (
+    <div className="conn-status">
+      <span className={`conn-dot ${dotClass}`}></span>
+      {labels[status]}
+    </div>
+  );
+}
+
+/* ===================== RENDER ===================== */
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
