@@ -695,6 +695,15 @@ if (!FIREBASE_NOT_CONFIGURED) {
 
 const DOC_PATH = { collection: "bellaCare", doc: "state" };
 
+/* ===================== PASSWORD GATE =====================
+   Simple shared-password lock. NOT real security — anyone who views the
+   page source can read this value. It just keeps the dashboard from being
+   stumbled into by strangers or search engines. Change this to whatever
+   your family wants to use.
+   ============================================================ */
+const SHARED_PASSWORD = "bella2026";
+const PASSWORD_STORAGE_KEY = "bella_unlocked";
+
 /* ===================== DEFAULT DATA ===================== */
 
 function todayStr() {
@@ -749,7 +758,7 @@ function makeDefaultSchedule() {
 function makeDefaultCareCard() {
   return {
     feeding: "Half cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
-    treats: "PB Nannas(2) or One Yapple Nanna.\nNo rawhide \u2014 upsets her stomach and mom.",
+    treats: "PB Nannas(2) or Yapple Nannas(1) (Not too many!).\nNo rawhide \u2014 upsets her stomach.",
     temperament: "Friendly with people, a little shy with new dogs at first.\nLoves belly rubs. Startles at vacuum cleaners.",
     emergency: "Vet: Hudson Veterinary Hospital \u2014 (330) 650-2929"
   };
@@ -804,6 +813,86 @@ function getAllTasks(state) {
 function isTaskDone(task) {
   if (task.type === "letout") return task.pee || task.poop;
   return !!task.done;
+}
+
+/* ===================== PASSWORD GATE UI ===================== */
+
+function LockScreen({ onUnlock }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState(false);
+
+  function submit(e) {
+    e.preventDefault();
+    if (value === SHARED_PASSWORD) {
+      localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
+      onUnlock();
+    } else {
+      setError(true);
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20
+    }}>
+      <div style={{
+        background: "var(--white)",
+        border: "1.5px solid var(--line)",
+        borderRadius: 20,
+        padding: "32px 24px",
+        maxWidth: 340,
+        width: "100%",
+        textAlign: "center",
+        boxShadow: "0 4px 16px rgba(61,43,31,0.08)"
+      }}>
+        <div style={{ fontSize: 40, marginBottom: 6 }}>🐾</div>
+        <h2 style={{ fontSize: 20, marginBottom: 4 }}>Bella's Care Dashboard</h2>
+        <p style={{ fontSize: 13.5, color: "var(--ink-soft)", marginTop: 4, marginBottom: 18, fontWeight: 500 }}>
+          Enter the family password to continue
+        </p>
+        <form onSubmit={submit}>
+          <input
+            type="password"
+            autoFocus
+            value={value}
+            onChange={(e) => { setValue(e.target.value); setError(false); }}
+            placeholder="Password"
+            style={{
+              width: "100%",
+              padding: "11px 14px",
+              borderRadius: 10,
+              border: `1.5px solid ${error ? "var(--rust)" : "var(--line)"}`,
+              fontSize: 15,
+              fontFamily: "inherit",
+              textAlign: "center",
+              boxSizing: "border-box"
+            }}
+          />
+          {error && (
+            <div style={{ color: "var(--rust)", fontSize: 12.5, fontWeight: 600, marginTop: 8 }}>
+              That's not it — try again.
+            </div>
+          )}
+          <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 14, padding: "11px 14px" }}>
+            Unlock
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  const [unlocked, setUnlocked] = useState(() => localStorage.getItem(PASSWORD_STORAGE_KEY) === "true");
+
+  if (!unlocked) {
+    return <LockScreen onUnlock={() => setUnlocked(true)} />;
+  }
+  return <App />;
 }
 
 /* ===================== MAIN APP ===================== */
@@ -1421,7 +1510,7 @@ function ConnStatus({ status }) {
 /* ===================== RENDER ===================== */
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
+root.render(<Root />);
 </script>
 
 <script>
