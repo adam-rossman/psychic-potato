@@ -10,10 +10,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-<!-- React -->
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+<!-- React (version-pinned to avoid CDN drift) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js" crossorigin></script>
 
 <!-- Firebase (compat libraries, simplest for a single static file) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -657,7 +657,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel-app" id="bella-app-source">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 /* ===================== FIREBASE CONFIG =====================
@@ -665,12 +665,12 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
    See the setup guide for exact steps to get these values.
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "AIzaSyD44gMdsHzBsIbEmjsGBAl2c_Sl-W2gk2Q",
-  authDomain: "bella-care-dashboard.firebaseapp.com",
-  projectId: "bella-care-dashboard",
-  storageBucket: "bella-care-dashboard.firebasestorage.app",
-  messagingSenderId: "666629703663",
-  appId: "1:666629703663:web:15ffe5cdb52e1337d3181a"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const FIREBASE_NOT_CONFIGURED = firebaseConfig.apiKey === "YOUR_API_KEY";
@@ -1410,6 +1410,31 @@ function ConnStatus({ status }) {
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
+</script>
+
+<script>
+  // Manually transform and run the app source above. We avoid Babel
+  // Standalone's automatic <script type="text/babel"> page-scan (some
+  // CDN-served versions choke when other plain <script> tags are present
+  // on the page, throwing "Cannot use import statement outside a module").
+  // Reading the source ourselves and calling Babel.transform() directly
+  // sidesteps that scanner entirely.
+  (function () {
+    var sourceEl = document.getElementById("bella-app-source");
+    var code = sourceEl.textContent;
+    try {
+      var output = Babel.transform(code, { presets: ["react"] }).code;
+      var script = document.createElement("script");
+      script.text = output;
+      document.body.appendChild(script);
+    } catch (err) {
+      console.error("Failed to start Bella's dashboard:", err);
+      document.getElementById("root").innerHTML =
+        '<div style="padding:40px;text-align:center;font-family:sans-serif;color:#A23E2E;">' +
+        'Something went wrong loading the dashboard. Check the browser console (F12) for details.' +
+        '</div>';
+    }
+  })();
 </script>
 </body>
 </html>
