@@ -6,6 +6,18 @@
 <title>Bella's Care Dashboard</title>
 <meta name="description" content="Daily care dashboard for Bella the dog" />
 
+<!-- PWA: manifest + icons -->
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#C4622D" />
+
+<!-- iOS: make "Add to Home Screen" open as a standalone app -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Bella's Care" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1435,6 +1447,17 @@ root.render(<App />);
         '</div>';
     }
   })();
+
+  // Register the service worker (enables "Add to Home Screen" / install
+  // prompts on Chrome/Android; Safari on iOS ignores this but still
+  // supports manual "Add to Home Screen" via the share sheet).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (err) {
+        console.warn("Service worker registration failed:", err);
+      });
+    });
+  }
 </script>
 </body>
 </html>
