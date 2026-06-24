@@ -797,6 +797,21 @@ function makeDefaultState() {
   };
 }
 
+/* Defensive merge: backfills any field missing or malformed in data coming
+   from Firestore (e.g. an older/partial document) with sensible defaults,
+   so the app never crashes on an incomplete document instead of healing
+   itself. */
+function normalizeState(data) {
+  const fallback = makeDefaultState();
+  if (!data || typeof data !== "object") return fallback;
+  return {
+    dateKey: typeof data.dateKey === "string" ? data.dateKey : fallback.dateKey,
+    schedule: Array.isArray(data.schedule) && data.schedule.length > 0 ? data.schedule : fallback.schedule,
+    customTasks: Array.isArray(data.customTasks) ? data.customTasks : fallback.customTasks,
+    careCard: data.careCard && typeof data.careCard === "object" ? { ...fallback.careCard, ...data.careCard } : fallback.careCard
+  };
+}
+
 /* ===================== ICONS ===================== */
 
 function CheckIcon() {
@@ -950,9 +965,10 @@ function App() {
           return;
         }
         const data = snap.data();
-        if (data.dateKey !== todayStr()) {
+        const normalized = normalizeState(data);
+        if (normalized.dateKey !== todayStr()) {
           const resetState = {
-            ...data,
+            ...normalized,
             dateKey: todayStr(),
             schedule: makeDefaultSchedule(),
             customTasks: []
@@ -961,8 +977,16 @@ function App() {
           ref.set(resetState).catch(() => {});
           setState(resetState);
         } else {
-          skipNextWrite.current = true;
-          setState(data);
+          // If the stored doc was missing/malformed fields, write the
+          // healed version back so future loads (and other users) get
+          // the corrected shape too.
+          if (JSON.stringify(normalized) !== JSON.stringify(data)) {
+            skipNextWrite.current = true;
+            ref.set(normalized).catch(() => {});
+          } else {
+            skipNextWrite.current = true;
+          }
+          setState(normalized);
         }
         isFirstLoad.current = false;
       },
@@ -1422,9 +1446,10 @@ function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
 /* ===================== CARE CARD ===================== */
 
 function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave }) {
-  const [draft, setDraft] = useState(careCard);
+  const safeCareCard = careCard || makeDefaultCareCard();
+  const [draft, setDraft] = useState(safeCareCard);
 
-  useEffect(() => { if (editing) setDraft(careCard); }, [editing, careCard]);
+  useEffect(() => { if (editing) setDraft(safeCareCard); }, [editing, safeCareCard]);
 
   return (
     <div className="care-card-section" id="section-carecard">
@@ -1438,19 +1463,19 @@ function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave })
           <div className="care-grid">
             <div className="care-field">
               <div className="care-field-label">Feeding</div>
-              <div className="care-field-value">{careCard.feeding || "—"}</div>
+              <div className="care-field-value">{safeCareCard.feeding || "—"}</div>
             </div>
             <div className="care-field">
               <div className="care-field-label">Favorite treats</div>
-              <div className="care-field-value">{careCard.treats || "—"}</div>
+              <div className="care-field-value">{safeCareCard.treats || "—"}</div>
             </div>
             <div className="care-field">
               <div className="care-field-label">Temperament</div>
-              <div className="care-field-value">{careCard.temperament || "—"}</div>
+              <div className="care-field-value">{safeCareCard.temperament || "—"}</div>
             </div>
             <div className="care-field emergency">
               <div className="care-field-label">🚨 Emergency contacts</div>
-              <div className="care-field-value">{careCard.emergency || "—"}</div>
+              <div className="care-field-value">{safeCareCard.emergency || "—"}</div>
             </div>
           </div>
         ) : (
