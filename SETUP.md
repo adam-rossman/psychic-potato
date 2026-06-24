@@ -102,6 +102,32 @@ To swap in a new photo, crop it to a square focused on Bella's face first
 from that square — or just send Claude the new photo and ask it to redo the
 icon set.
 
+## Password protection
+
+The dashboard has a simple shared-password lock screen. It asks once per
+device — after someone enters the password correctly, that browser
+remembers it (via `localStorage`) and won't ask again unless they clear
+their browser data.
+
+**Important: this is not real security.** It's client-side only, meaning
+anyone who views the page source can read the password in plain text. The
+underlying data in Firestore is also openly accessible to anyone with the
+URL (see the security rules note in step 3 above). This lock screen is just
+meant to keep the dashboard from being stumbled into by a stranger or
+indexed by a search engine — not to protect sensitive information.
+
+To change the password, open `index.html` and find this line near the top
+of the script:
+
+```js
+const SHARED_PASSWORD = "bella2026";
+```
+
+Replace `"bella2026"` with whatever you want, then redeploy. Anyone who was
+already unlocked on their device stays unlocked — they won't be asked
+again unless they clear their browser data or you change the
+`PASSWORD_STORAGE_KEY` value too (which forces everyone to re-enter it).
+
 ## How daily reset works
 
 - The dashboard automatically clears all checkmarks and custom tasks at
