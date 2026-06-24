@@ -704,6 +704,30 @@ const DOC_PATH = { collection: "bellaCare", doc: "state" };
 const SHARED_PASSWORD = "bella2026";
 const PASSWORD_STORAGE_KEY = "bella_unlocked";
 
+/* ===================== SAFE STORAGE HELPERS =====================
+   localStorage can throw in some contexts (private browsing in certain
+   browsers, restricted storage settings, some embedded/standalone PWA
+   contexts). Wrapping every access so a storage failure never crashes
+   the whole app render — it just falls back to "not remembered".
+   ================================================================== */
+function safeGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn("localStorage unavailable (get):", e);
+    return null;
+  }
+}
+function safeSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.warn("localStorage unavailable (set):", e);
+    return false;
+  }
+}
+
 /* ===================== DEFAULT DATA ===================== */
 
 function todayStr() {
@@ -757,10 +781,10 @@ function makeDefaultSchedule() {
 
 function makeDefaultCareCard() {
   return {
-    feeding: "Half cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
-    treats: "PB Nannas(2) or Yapple Nannas(1) (Not too many!).\nNo rawhide \u2014 upsets her stomach.",
+    feeding: "1 cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
+    treats: "Freeze-dried liver bites (the good ones, top shelf).\nNo rawhide \u2014 upsets her stomach.",
     temperament: "Friendly with people, a little shy with new dogs at first.\nLoves belly rubs. Startles at vacuum cleaners.",
-    emergency: "Vet: Hudson Veterinary Hospital \u2014 (330) 650-2929"
+    emergency: "Vet: Maple Ridge Animal Hospital \u2014 (555) 014-2290\nAfter-hours emergency: (555) 014-9911\nOwner cell: (555) 014-6743"
   };
 }
 
@@ -824,7 +848,7 @@ function LockScreen({ onUnlock }) {
   function submit(e) {
     e.preventDefault();
     if (value === SHARED_PASSWORD) {
-      localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
+      safeSet(PASSWORD_STORAGE_KEY, "true");
       onUnlock();
     } else {
       setError(true);
@@ -887,7 +911,7 @@ function LockScreen({ onUnlock }) {
 }
 
 function Root() {
-  const [unlocked, setUnlocked] = useState(() => localStorage.getItem(PASSWORD_STORAGE_KEY) === "true");
+  const [unlocked, setUnlocked] = useState(() => safeGet(PASSWORD_STORAGE_KEY) === "true");
 
   if (!unlocked) {
     return <LockScreen onUnlock={() => setUnlocked(true)} />;
@@ -902,8 +926,8 @@ function App() {
   const [connStatus, setConnStatus] = useState(FIREBASE_NOT_CONFIGURED ? "unconfigured" : "loading");
   const [careEditOpen, setCareEditOpen] = useState(false);
   const [whoModalOpen, setWhoModalOpen] = useState(null); // { periodId, taskId } pending name prompt
-  const [currentUser, setCurrentUser] = useState(() => localStorage.getItem("bella_user_name") || "");
-  const [nameModalOpen, setNameModalOpen] = useState(!localStorage.getItem("bella_user_name"));
+  const [currentUser, setCurrentUser] = useState(() => safeGet("bella_user_name") || "");
+  const [nameModalOpen, setNameModalOpen] = useState(!safeGet("bella_user_name"));
   const isFirstLoad = useRef(true);
   const skipNextWrite = useRef(false);
 
@@ -989,7 +1013,7 @@ function App() {
   function saveName(name) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    localStorage.setItem("bella_user_name", trimmed);
+    safeSet("bella_user_name", trimmed);
     setCurrentUser(trimmed);
     setNameModalOpen(false);
   }
@@ -1514,6 +1538,21 @@ root.render(<Root />);
 </script>
 
 <script>
+  // Backstop: if anything throws after the app script has been injected
+  // and started running (e.g. inside a React component during initial
+  // render), show a visible message instead of leaving a silent blank
+  // page. The try/catch around the Babel transform below only covers the
+  // transform step itself, not errors during the app's actual execution.
+  window.addEventListener("error", function (event) {
+    var rootEl = document.getElementById("root");
+    if (rootEl && !rootEl.hasChildNodes()) {
+      rootEl.innerHTML =
+        '<div style="padding:40px;text-align:center;font-family:sans-serif;color:#A23E2E;">' +
+        'Something went wrong loading the dashboard. Check the browser console (F12) for details.' +
+        '</div>';
+    }
+  });
+
   // Manually transform and run the app source above. We avoid Babel
   // Standalone's automatic <script type="text/babel"> page-scan (some
   // CDN-served versions choke when other plain <script> tags are present
