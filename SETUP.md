@@ -42,8 +42,8 @@ a free Firebase project so everyone's checkmarks sync to each other.
 ## 3. Set security rules
 
 By default, production mode blocks all reads/writes. Since this app has no
-login system (just a name people type in once), we'll open access to just the
-one document this app uses:
+login system (just a name people type in once), we'll open access to the
+two things this app uses: today's live document, and the daily history log:
 
 1. In Firestore, click the **Rules** tab.
 2. Replace the contents with:
@@ -55,16 +55,20 @@ one document this app uses:
        match /bellaCare/state {
          allow read, write: if true;
        }
+       match /dailyLogs/{date} {
+         allow read, write: if true;
+       }
      }
    }
    ```
 
 3. Click **Publish**.
 
-   **Note on privacy:** this makes the one shared document
-   (`bellaCare/state`) readable and writable by anyone who has your deployed
-   URL — there's no login. That's fine for a private family tool that isn't
-   indexed or shared publicly, but don't post the link somewhere public. If
+   **Note on privacy:** this makes the live document (`bellaCare/state`)
+   and every saved daily history record (`dailyLogs/*`) readable and
+   writable by anyone who has your deployed URL — there's no login. That's
+   fine for a private family tool that isn't indexed or shared publicly,
+   but don't post the link somewhere public. If
    you want real authentication later, Firebase supports that too, but it's
    more setup than this guide covers.
 
@@ -131,11 +135,32 @@ again unless they clear their browser data or you change the
 ## How daily reset works
 
 - The dashboard automatically clears all checkmarks and custom tasks at
-  midnight (checked every minute the app is open).
+  midnight (checked every minute the app is open), using each device's
+  local time.
 - Anyone can also tap **"Start new day now"** at the bottom to reset early —
   it asks for confirmation first since it affects everyone.
 - The care card (feeding, treats, temperament, emergency contacts) does
   **not** reset — that information persists until someone edits it.
+- Right before a reset happens (automatic or manual), the day's final
+  schedule, custom tasks, and care card are saved to the `dailyLogs`
+  collection in Firestore, dated by that day. This is what powers the
+  history view described below.
+
+## Viewing history
+
+Use the **‹ ›** arrows next to the date at the top to step backward and
+forward one day at a time, or tap the date itself to open a calendar and
+jump to any specific day. Viewing a past day shows that day's final record
+— what was checked off, who did it, and what the care card said that day
+— but everything is **read-only**; nothing on a historical day can be
+edited.
+
+Tap **"Jump to today"** (shown whenever you're viewing a past day) to
+return to the live, editable dashboard.
+
+A day only has a history record once it has actually finished (reset
+either automatically or manually) — today's in-progress record won't show
+up in history until the day ends.
 
 ## Customizing the default schedule
 
