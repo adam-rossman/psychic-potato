@@ -123,6 +123,86 @@
     color: var(--ink-soft);
     margin-top: 10px;
   }
+  .date-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    position: relative;
+  }
+  .date-pill-button {
+    margin-top: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .date-pill-button:hover {
+    border-color: var(--terracotta);
+    color: var(--terracotta-deep);
+  }
+  .date-nav-arrow {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .date-nav-arrow:hover:not(:disabled) {
+    border-color: var(--terracotta);
+    color: var(--terracotta-deep);
+  }
+  .date-nav-arrow:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .date-nav-hidden-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .jump-today-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--terracotta);
+    color: var(--white);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .jump-today-btn:hover { background: var(--terracotta-deep); }
+
+  .history-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #EFE9DC;
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .history-banner .badge-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ink-soft);
+    flex-shrink: 0;
+  }
 
   /* ---------- PAW PROGRESS TRAIL (signature element) ---------- */
   .progress-card {
@@ -694,6 +774,22 @@ if (!FIREBASE_NOT_CONFIGURED) {
 }
 
 const DOC_PATH = { collection: "bellaCare", doc: "state" };
+const DAILY_LOGS_COLLECTION = "dailyLogs";
+
+/* Archives a finished day's state into dailyLogs/{date}, so history is
+   preserved even after the live document resets. Safe to call more than
+   once for the same date (e.g. if multiple tabs detect the day rollover
+   at the same time) — it just overwrites with the same content. */
+function archiveDay(stateToArchive) {
+  if (!db || !stateToArchive || !stateToArchive.dateKey) return;
+  db.collection(DAILY_LOGS_COLLECTION).doc(stateToArchive.dateKey).set({
+    dateKey: stateToArchive.dateKey,
+    schedule: stateToArchive.schedule,
+    customTasks: stateToArchive.customTasks,
+    careCard: stateToArchive.careCard,
+    archivedAt: new Date().toISOString()
+  }).catch((err) => console.warn("Failed to archive day:", err));
+}
 
 /* ===================== PASSWORD GATE =====================
    Simple shared-password lock. NOT real security — anyone who views the
@@ -731,8 +827,35 @@ function safeSet(key, value) {
 /* ===================== DEFAULT DATA ===================== */
 
 function todayStr() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  return dateToKey(new Date());
+}
+
+// Formats a Date as YYYY-MM-DD using LOCAL time (not UTC). This matters:
+// toISOString() would report UTC, which can be a different calendar day
+// than the user's actual local date — meaning resets and history could
+// land on the wrong day depending on timezone and time of day.
+function dateToKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Parses a YYYY-MM-DD key back into a local Date (midnight local time).
+function keyToDate(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatDateKeyForDisplay(key) {
+  const d = keyToDate(key);
+  return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+function shiftDateKey(key, deltaDays) {
+  const d = keyToDate(key);
+  d.setDate(d.getDate() + deltaDays);
+  return dateToKey(d);
 }
 
 function makeDefaultSchedule() {
@@ -769,7 +892,7 @@ function makeDefaultSchedule() {
     {
       id: "evening",
       label: "Evening",
-      time: "6:30 – 9:00 PM",
+      time: "5:30 – 7:00 PM",
       icon: "🌙",
       tasks: [
         { id: "e-meal", type: "meal", name: "Dinner", done: false, loggedBy: null, loggedAt: null },
@@ -781,10 +904,9 @@ function makeDefaultSchedule() {
 
 function makeDefaultCareCard() {
   return {
-    feeding: "1 cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
-    treats: "Freeze-dried liver bites (the good ones, top shelf).\nNo rawhide \u2014 upsets her stomach.",
-    temperament: "Friendly with people, a little shy with new dogs at first.\nLoves belly rubs. Startles at vacuum cleaners.",
-    emergency: "Vet: Maple Ridge Animal Hospital \u2014 (555) 014-2290\nAfter-hours emergency: (555) 014-9911\nOwner cell: (555) 014-6743"
+    feeding: "Half cup dry food, morning & evening.\nHalf cup at midday meal.\nFresh water refreshed each visit.",
+    treats: "PB(1-2) or Yapple Nannas(1) (the good ones, top shelf).",
+    emergency: "Vet: Hudson Veterinary Hospital \u2014 (330) 650-2929"
   };
 }
 
@@ -946,6 +1068,50 @@ function App() {
   const isFirstLoad = useRef(true);
   const skipNextWrite = useRef(false);
 
+  /* ---- history viewing ---- */
+  // viewedDate: null means "viewing today, live". Any other YYYY-MM-DD
+  // string means "viewing a read-only historical record for that date".
+  const [viewedDate, setViewedDate] = useState(null);
+  const [historyRecord, setHistoryRecord] = useState(null); // the fetched dailyLogs doc, or undefined if none exists, or null while loading
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const isViewingHistory = viewedDate !== null && viewedDate !== todayStr();
+
+  useEffect(() => {
+    if (!isViewingHistory) {
+      setHistoryRecord(null);
+      return;
+    }
+    if (FIREBASE_NOT_CONFIGURED) {
+      setHistoryRecord(undefined);
+      return;
+    }
+    setHistoryLoading(true);
+    db.collection(DAILY_LOGS_COLLECTION).doc(viewedDate).get()
+      .then((snap) => {
+        setHistoryRecord(snap.exists ? normalizeState(snap.data()) : undefined);
+      })
+      .catch((err) => {
+        console.warn("Failed to load history for", viewedDate, err);
+        setHistoryRecord(undefined);
+      })
+      .finally(() => setHistoryLoading(false));
+  }, [viewedDate, isViewingHistory]);
+
+  function jumpToToday() {
+    setViewedDate(null);
+  }
+
+  function goToDate(dateKey) {
+    const clamped = dateKey > todayStr() ? todayStr() : dateKey;
+    setViewedDate(clamped === todayStr() ? null : clamped);
+  }
+
+  function shiftDay(delta) {
+    const base = viewedDate || todayStr();
+    goToDate(shiftDateKey(base, delta));
+  }
+
   /* ---- Firestore subscription ---- */
   useEffect(() => {
     if (FIREBASE_NOT_CONFIGURED) {
@@ -967,6 +1133,7 @@ function App() {
         const data = snap.data();
         const normalized = normalizeState(data);
         if (normalized.dateKey !== todayStr()) {
+          archiveDay(normalized);
           const resetState = {
             ...normalized,
             dateKey: todayStr(),
@@ -1011,7 +1178,7 @@ function App() {
     const interval = setInterval(() => {
       if (!state) return;
       if (state.dateKey !== todayStr()) {
-        handleResetDay();
+        performReset();
       }
     }, 60000);
     return () => clearInterval(interval);
@@ -1024,14 +1191,24 @@ function App() {
     });
   }
 
-  function handleResetDay() {
-    if (!window.confirm("Start a new day? This clears today's checkmarks and custom tasks for everyone.")) return;
+  // Archives the current day and clears today's tasks. No confirmation —
+  // used for automatic transitions (midnight) where popping a dialog on
+  // someone's phone at 12:00am would be poor UX.
+  function performReset() {
+    archiveDay(state);
     updateState(prev => ({
       ...prev,
       dateKey: todayStr(),
       schedule: makeDefaultSchedule(),
       customTasks: []
     }));
+  }
+
+  // Manual "Start new day now" button — confirms first since it affects
+  // everyone immediately, then runs the same reset.
+  function handleResetDay() {
+    if (!window.confirm("Start a new day? This clears today's checkmarks and custom tasks for everyone — today's record will be saved in history first.")) return;
+    performReset();
   }
 
   function saveName(name) {
@@ -1133,16 +1310,27 @@ function App() {
     );
   }
 
-  const allTasks = getAllTasks(state);
+  // Decide what to actually display: today's live, editable state, or a
+  // read-only historical record for a past date.
+  const displayedState = isViewingHistory ? (historyRecord || null) : state;
+  const readOnly = isViewingHistory;
+
+  const allTasks = displayedState ? getAllTasks(displayedState) : [];
   const totalCount = allTasks.length;
   const doneCount = allTasks.filter(isTaskDone).length;
   const pct = totalCount > 0 ? doneCount / totalCount : 0;
 
   return (
     <div className="app-shell">
-      <Header />
+      <DateNav
+        viewedDate={viewedDate || todayStr()}
+        isViewingHistory={isViewingHistory}
+        onGoToDate={goToDate}
+        onShiftDay={shiftDay}
+        onJumpToToday={jumpToToday}
+      />
 
-      {FIREBASE_NOT_CONFIGURED && (
+      {FIREBASE_NOT_CONFIGURED && !isViewingHistory && (
         <div className="setup-banner">
           <strong>Heads up:</strong> Firebase isn't connected yet, so changes won't sync between family members
           (they'll only be saved on this device). Add your Firebase config in <code>index.html</code> — see the
@@ -1150,46 +1338,73 @@ function App() {
         </div>
       )}
 
-      <ProgressTrail done={doneCount} total={totalCount} pct={pct} />
+      {isViewingHistory && historyLoading && (
+        <div style={{ padding: 30, textAlign: "center", color: "var(--ink-soft)" }}>Loading that day's record…</div>
+      )}
 
-      <NavTabs schedule={state.schedule} />
-
-      {state.schedule.map(period => (
-        <ScheduleSection
-          key={period.id}
-          period={period}
-          onToggleMeal={toggleMeal}
-          onToggleLetout={toggleLetout}
-        />
-      ))}
-
-      <CustomTaskSection
-        customTasks={state.customTasks}
-        onToggle={toggleCustomTask}
-        onAdd={addCustomTask}
-        onDelete={deleteCustomTask}
-      />
-
-      <CareCardSection
-        careCard={state.careCard}
-        editing={careEditOpen}
-        onEditOpen={() => setCareEditOpen(true)}
-        onEditClose={() => setCareEditOpen(false)}
-        onSave={saveCareCard}
-      />
-
-      <div className="footer-actions">
-        <button className="reset-btn" onClick={handleResetDay}>🔄 Start new day now</button>
-        <div className="footer-note">
-          Resets automatically at midnight · Signed in as {currentUser || "Guest"}{" "}
-          <button
-            onClick={() => setNameModalOpen(true)}
-            style={{ textDecoration: "underline", color: "var(--ink-soft)", fontWeight: 700 }}
-          >
-            change
-          </button>
+      {isViewingHistory && !historyLoading && historyRecord === undefined && (
+        <div className="setup-banner" style={{ background: "var(--cream-deep)", borderColor: "var(--line)", color: "var(--ink-soft)" }}>
+          No record was saved for {formatDateKeyForDisplay(viewedDate)}. History is only saved once a day finishes
+          (at reset), so today's record won't appear here until then.
         </div>
-      </div>
+      )}
+
+      {displayedState && (!isViewingHistory || (!historyLoading && historyRecord)) && (
+        <React.Fragment>
+          {isViewingHistory && (
+            <div className="history-banner">
+              <span className="badge-dot"></span>
+              Read-only — this is a saved record from {formatDateKeyForDisplay(viewedDate)}. Nothing here can be edited.
+            </div>
+          )}
+
+          <ProgressTrail done={doneCount} total={totalCount} pct={pct} />
+
+          <NavTabs schedule={displayedState.schedule} />
+
+          {displayedState.schedule.map(period => (
+            <ScheduleSection
+              key={period.id}
+              period={period}
+              onToggleMeal={toggleMeal}
+              onToggleLetout={toggleLetout}
+              readOnly={readOnly}
+            />
+          ))}
+
+          <CustomTaskSection
+            customTasks={displayedState.customTasks}
+            onToggle={toggleCustomTask}
+            onAdd={addCustomTask}
+            onDelete={deleteCustomTask}
+            readOnly={readOnly}
+          />
+
+          <CareCardSection
+            careCard={displayedState.careCard}
+            editing={careEditOpen && !readOnly}
+            onEditOpen={() => setCareEditOpen(true)}
+            onEditClose={() => setCareEditOpen(false)}
+            onSave={saveCareCard}
+            readOnly={readOnly}
+          />
+        </React.Fragment>
+      )}
+
+      {!isViewingHistory && (
+        <div className="footer-actions">
+          <button className="reset-btn" onClick={handleResetDay}>🔄 Start new day now</button>
+          <div className="footer-note">
+            Resets automatically at midnight · Signed in as {currentUser || "Guest"}{" "}
+            <button
+              onClick={() => setNameModalOpen(true)}
+              style={{ textDecoration: "underline", color: "var(--ink-soft)", fontWeight: 700 }}
+            >
+              change
+            </button>
+          </div>
+        </div>
+      )}
 
       {nameModalOpen && <NameModal initial={currentUser} onSave={saveName} onClose={() => currentUser && setNameModalOpen(false)} canClose={!!currentUser} />}
 
@@ -1198,15 +1413,54 @@ function App() {
   );
 }
 
-/* ===================== HEADER ===================== */
+/* ===================== DATE NAVIGATION ===================== */
 
-function Header() {
-  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+function DateNav({ viewedDate, isViewingHistory, onGoToDate, onShiftDay, onJumpToToday }) {
+  const dateInputRef = useRef(null);
+  const dateLabel = formatDateKeyForDisplay(viewedDate);
+  const isToday = viewedDate === todayStr();
+
+  function openPicker() {
+    if (dateInputRef.current) {
+      if (dateInputRef.current.showPicker) {
+        dateInputRef.current.showPicker();
+      } else {
+        dateInputRef.current.click();
+      }
+    }
+  }
+
   return (
     <div className="header">
       <h1 className="header-title">🐾 Bella's <span className="accent">Care</span> Dashboard</h1>
-      <div className="header-sub">Everything today's sitter needs to know</div>
-      <div className="date-pill">📅 {dateLabel}</div>
+      <div className="header-sub">
+        {isViewingHistory ? "Viewing a past day's record" : "Everything today's sitter needs to know"}
+      </div>
+
+      <div className="date-nav-row">
+        <button className="date-nav-arrow" onClick={() => onShiftDay(-1)} aria-label="Previous day">‹</button>
+
+        <button className="date-pill date-pill-button" onClick={openPicker}>
+          📅 {dateLabel}
+        </button>
+        <input
+          ref={dateInputRef}
+          type="date"
+          className="date-nav-hidden-input"
+          value={viewedDate}
+          max={todayStr()}
+          onChange={(e) => { if (e.target.value) onGoToDate(e.target.value); }}
+          aria-label="Choose a date"
+        />
+
+        <button className="date-nav-arrow" onClick={() => onShiftDay(1)} disabled={isToday} aria-label="Next day">›</button>
+      </div>
+
+      {isViewingHistory && (
+        <button className="jump-today-btn" onClick={onJumpToToday}>
+          ⤺ Jump to today
+        </button>
+      )}
     </div>
   );
 }
@@ -1285,7 +1539,7 @@ function NavTabs({ schedule }) {
 
 /* ===================== SCHEDULE SECTION ===================== */
 
-function ScheduleSection({ period, onToggleMeal, onToggleLetout }) {
+function ScheduleSection({ period, onToggleMeal, onToggleLetout, readOnly }) {
   const allDone = period.tasks.every(isTaskDone);
   const doneCount = period.tasks.filter(isTaskDone).length;
 
@@ -1304,8 +1558,8 @@ function ScheduleSection({ period, onToggleMeal, onToggleLetout }) {
       <div className="task-list">
         {period.tasks.map(task => (
           task.type === "meal"
-            ? <MealTask key={task.id} task={task} onToggle={() => onToggleMeal(period.id, task.id)} />
-            : <LetoutTask key={task.id} task={task} onToggleField={(field) => onToggleLetout(period.id, task.id, field)} />
+            ? <MealTask key={task.id} task={task} onToggle={() => onToggleMeal(period.id, task.id)} readOnly={readOnly} />
+            : <LetoutTask key={task.id} task={task} onToggleField={(field) => onToggleLetout(period.id, task.id, field)} readOnly={readOnly} />
         ))}
       </div>
     </div>
@@ -1318,11 +1572,17 @@ function formatTime(iso) {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-function MealTask({ task, onToggle }) {
+function MealTask({ task, onToggle, readOnly }) {
   return (
     <div className={`task ${task.done ? "done" : ""}`}>
       <div className="task-row">
-        <button className={`check-btn ${task.done ? "checked" : ""}`} onClick={onToggle} aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}>
+        <button
+          className={`check-btn ${task.done ? "checked" : ""}`}
+          onClick={readOnly ? undefined : onToggle}
+          disabled={readOnly}
+          style={readOnly ? { cursor: "default" } : undefined}
+          aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}
+        >
           <CheckIcon />
         </button>
         <div className="task-main">
@@ -1336,7 +1596,7 @@ function MealTask({ task, onToggle }) {
   );
 }
 
-function LetoutTask({ task, onToggleField }) {
+function LetoutTask({ task, onToggleField, readOnly }) {
   const done = task.pee || task.poop;
   return (
     <div className={`task ${done ? "done" : ""}`}>
@@ -1346,12 +1606,22 @@ function LetoutTask({ task, onToggleField }) {
         </button>
         <div className="task-main">
           <div className="task-name">🚪 {task.name}</div>
-          <div className="task-meta">Tap what Bella did</div>
+          {!readOnly && <div className="task-meta">Tap what Bella did</div>}
           <div className="letout-pills">
-            <button className={`pill pee ${task.pee ? "active pee" : ""}`} onClick={() => onToggleField("pee")}>
+            <button
+              className={`pill pee ${task.pee ? "active pee" : ""}`}
+              onClick={readOnly ? undefined : () => onToggleField("pee")}
+              disabled={readOnly}
+              style={readOnly ? { cursor: "default" } : undefined}
+            >
               💧 Pee
             </button>
-            <button className={`pill poop ${task.poop ? "active poop" : ""}`} onClick={() => onToggleField("poop")}>
+            <button
+              className={`pill poop ${task.poop ? "active poop" : ""}`}
+              onClick={readOnly ? undefined : () => onToggleField("poop")}
+              disabled={readOnly}
+              style={readOnly ? { cursor: "default" } : undefined}
+            >
               💩 Poop
             </button>
           </div>
@@ -1366,7 +1636,7 @@ function LetoutTask({ task, onToggleField }) {
 
 /* ===================== CUSTOM TASKS ===================== */
 
-function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
+function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete, readOnly }) {
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -1378,6 +1648,10 @@ function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
     setName("");
     setNotes("");
     setFormOpen(false);
+  }
+
+  if (readOnly && customTasks.length === 0) {
+    return null;
   }
 
   return (
@@ -1398,7 +1672,13 @@ function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
         {customTasks.map(task => (
           <div key={task.id} className={`task ${task.done ? "done" : ""}`}>
             <div className="task-row">
-              <button className={`check-btn ${task.done ? "checked" : ""}`} onClick={() => onToggle(task.id)} aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}>
+              <button
+                className={`check-btn ${task.done ? "checked" : ""}`}
+                onClick={readOnly ? undefined : () => onToggle(task.id)}
+                disabled={readOnly}
+                style={readOnly ? { cursor: "default" } : undefined}
+                aria-label={`Mark ${task.name} ${task.done ? "not done" : "done"}`}
+              >
                 <CheckIcon />
               </button>
               <div className="task-main">
@@ -1408,36 +1688,40 @@ function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
                   <div className="log-tag">Logged by {task.loggedBy} · {formatTime(task.loggedAt)}</div>
                 )}
               </div>
-              <button className="task-delete" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.name}`}>✕</button>
+              {!readOnly && (
+                <button className="task-delete" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.name}`}>✕</button>
+              )}
             </div>
           </div>
         ))}
 
-        <div className="add-task-card">
-          {!formOpen ? (
-            <button className="add-task-toggle" onClick={() => setFormOpen(true)}>
-              <span className="plus-circle">+</span> Add a custom task
-            </button>
-          ) : (
-            <form className="add-task-form" onSubmit={submit}>
-              <input
-                placeholder="Task name (e.g. Give heartworm pill)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
-              <input
-                placeholder="Notes (optional)"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-              <div className="form-btn-row">
-                <button type="button" className="btn-ghost" onClick={() => { setFormOpen(false); setName(""); setNotes(""); }}>Cancel</button>
-                <button type="submit" className="btn-primary">Add task</button>
-              </div>
-            </form>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="add-task-card">
+            {!formOpen ? (
+              <button className="add-task-toggle" onClick={() => setFormOpen(true)}>
+                <span className="plus-circle">+</span> Add a custom task
+              </button>
+            ) : (
+              <form className="add-task-form" onSubmit={submit}>
+                <input
+                  placeholder="Task name (e.g. Give heartworm pill)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                />
+                <input
+                  placeholder="Notes (optional)"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+                <div className="form-btn-row">
+                  <button type="button" className="btn-ghost" onClick={() => { setFormOpen(false); setName(""); setNotes(""); }}>Cancel</button>
+                  <button type="submit" className="btn-primary">Add task</button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1445,7 +1729,7 @@ function CustomTaskSection({ customTasks, onToggle, onAdd, onDelete }) {
 
 /* ===================== CARE CARD ===================== */
 
-function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave }) {
+function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave, readOnly }) {
   const safeCareCard = careCard || makeDefaultCareCard();
   const [draft, setDraft] = useState(safeCareCard);
 
@@ -1456,7 +1740,7 @@ function CareCardSection({ careCard, editing, onEditOpen, onEditClose, onSave })
       <div className="care-card">
         <div className="care-card-head">
           <div className="care-card-title">💛 Bella's Care Card</div>
-          {!editing && <button className="edit-btn" onClick={onEditOpen}>Edit</button>}
+          {!editing && !readOnly && <button className="edit-btn" onClick={onEditOpen}>Edit</button>}
         </div>
 
         {!editing ? (
